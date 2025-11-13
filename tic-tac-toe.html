@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tic-Tac-Toe vs AI</title>
+    <style>
+        :root {
+            --bg-dark: #020617;
+            --bg-card: #020617;
+            --bg-cell: #0b1120;
+            --bg-cell-hover: #111827;
+            --border-cell: #1f2937;
+            --x-color: #38bdf8;   /* cyan */
+            --o-color: #f97316;   /* orange */
+            --text-muted: #9ca3af;
+            --text-main: #e5e7eb;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background:
+                radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin-bottom: 6px;
+            letter-spacing: 0.05em;
+        }
+
+        h1 span {
+            background: linear-gradient(90deg, #38bdf8, #a855f7, #f97316);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        #status {
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            color: var(--text-muted);
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 8px;
+            padding: 18px;
+            border-radius: 16px;
+            background: radial-gradient(circle at top, #020617, #020617, #000);
+            box-shadow:
+                0 20px 40px rgba(15, 23, 42, 0.9),
+                0 0 20px rgba(56, 189, 248, 0.1);
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            background: var(--bg-cell);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.6rem;
+            cursor: pointer;
+            user-select: none;
+            border: 1px solid var(--border-cell);
+            transition:
+                transform 0.12s ease,
+                background 0.12s ease,
+                box-shadow 0.12s ease,
+                border-color 0.12s ease;
+        }
+
+        .cell:hover {
+            transform: translateY(-2px) scale(1.03);
+            background: var(--bg-cell-hover);
+            box-shadow: 0 0 12px rgba(148, 163, 184, 0.3);
+            border-color: #38bdf8;
+        }
+
+        .cell.disabled {
+            cursor: default;
+            opacity: 0.9;
+            box-shadow: none;
+            border-color: var(--border-cell);
+        }
+
+        /* X and O colors */
+        .cell.x {
+            color: var(--x-color);
+            text-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+        }
+
+        .cell.o {
+            color: var(--o-color);
+            text-shadow: 0 0 12px rgba(249, 115, 22, 0.7);
+        }
+
+        #controls {
+            margin-top: 16px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 8px 14px;
+            border-radius: 999px;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.6);
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        select, button {
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: none;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        select {
+            background: #020617;
+            color: var(--text-main);
+            border: 1px solid #334155;
+        }
+
+        button {
+            cursor: pointer;
+            background: linear-gradient(90deg, #38bdf8, #a855f7);
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 8px 20px rgba(56, 189, 248, 0.4);
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 26px rgba(56, 189, 248, 0.5);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 10px rgba(56, 189, 248, 0.3);
+        }
+
+        /* 🔥 Screen bloom overlay */
+        #flashOverlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 999;
+        }
+
+        body.game-win #flashOverlay {
+            animation: flashWin 0.7s ease-out forwards;
+            background:
+                radial-gradient(circle at center,
+                    rgba(34, 197, 94, 0.9) 0,
+                    rgba(34, 197, 94, 0.3) 35%,
+                    transparent 70%);
+        }
+
+        body.game-lose #flashOverlay {
+            animation: flashLose 0.7s ease-out forwards;
+            background:
+                radial-gradient(circle at center,
+                    rgba(248, 113, 113, 0.9) 0,
+                    rgba(248, 113, 113, 0.3) 35%,
+                    transparent 70%);
+        }
+
+        body.game-draw #flashOverlay {
+            animation: flashDraw 0.7s ease-out forwards;
+            background:
+                radial-gradient(circle at center,
+                    rgba(129, 140, 248, 0.9) 0,
+                    rgba(129, 140, 248, 0.3) 35%,
+                    transparent 70%);
+        }
+
+        @keyframes flashWin {
+            0%   { opacity: 0.9; transform: scale(0.9); }
+            100% { opacity: 0;   transform: scale(1.3); }
+        }
+
+        @keyframes flashLose {
+            0%   { opacity: 0.9; transform: scale(0.9); }
+            100% { opacity: 0;   transform: scale(1.3); }
+        }
+
+        @keyframes flashDraw {
+            0%   { opacity: 0.9; transform: scale(0.9); }
+            100% { opacity: 0;   transform: scale(1.3); }
+        }
+    </style>
+</head>
+<body>
+
+    <h1><span>Tic-Tac-Toe vs AI</span></h1>
+    <div id="status">Your turn (X)</div>
+
+    <div id="board"></div>
+
+    <div id="controls">
+        <label for="difficultySelect">Difficulty:</label>
+        <select id="difficultySelect">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Impossible</option>
+        </select>
+
+        <button id="resetBtn">Restart Game</button>
+    </div>
+
+    <!-- Overlay for bloom effect -->
+    <div id="flashOverlay"></div>
+
+    <script>
+        // --- Global game state variables ---
+        let board = Array(9).fill(null);  // 0-8 cells
+        let currentPlayer = "X";          // human = X, AI = O
+        let isGameOver = false;
+        let difficulty = "medium";        // easy | medium | hard
+
+        // --- Initialize the board and event listeners ---
+        function startGame()
+        {
+            board = Array(9).fill(null);
+            currentPlayer = "X";
+            isGameOver = false;
+            updateStatus("Your turn (X)");
+            document.body.classList.remove("game-win", "game-lose", "game-draw");
+            renderBoard();
+        }
+
+        // --- Update status text on the page ---
+        function updateStatus(message)
+        {
+            const statusDiv = document.getElementById("status");
+            statusDiv.textContent = message;
+        }
+
+        // --- Draw the 3x3 grid based on board[] ---
+        function renderBoard()
+        {
+            const boardDiv = document.getElementById("board");
+            boardDiv.innerHTML = "";
+
+            board.forEach((value, index) => {
+                const cellDiv = document.createElement("div");
+                cellDiv.classList.add("cell");
+                if (value !== null) {
+                    cellDiv.classList.add("disabled");
+                }
+
+                if (value === "X") cellDiv.classList.add("x");
+                if (value === "O") cellDiv.classList.add("o");
+
+                cellDiv.textContent = value ? value : "";
+                cellDiv.dataset.index = index;
+
+                cellDiv.addEventListener("click", handleCellClick);
+
+                boardDiv.appendChild(cellDiv);
+            });
+        }
+
+        // --- Handle when the human clicks a cell ---
+        function handleCellClick(event)
+        {
+            if (isGameOver) {
+                return;
+            }
+
+            const cellIndex = parseInt(event.target.dataset.index);
+
+            // ignore if already filled
+            if (board[cellIndex] !== null) {
+                return;
+            }
+
+            // Human move
+            makeMove(cellIndex, "X");
+
+            // Check if human ended the game
+            const resultAfterHuman = checkWinner(board);
+            if (resultAfterHuman !== null) {
+                endGame(resultAfterHuman);
+                return;
+            }
+
+            // AI turn (small delay so it feels natural)
+            setTimeout(() => {
+                makeAiMove();
+            }, 350);
+        }
+
+        // --- Place a move on the board ---
+        function makeMove(cellIndex, player)
+        {
+            if (board[cellIndex] === null && !isGameOver) {
+                board[cellIndex] = player;
+                renderBoard();
+            }
+        }
+
+        // --- Helper: get empty positions ---
+        function getEmptyIndices(currentBoard)
+        {
+            return currentBoard
+                .map((value, index) => value === null ? index : null)
+                .filter(index => index !== null);
+        }
+
+        // --- EASY AI: random move ---
+        function getRandomMove(currentBoard)
+        {
+            const empty = getEmptyIndices(currentBoard);
+            if (empty.length === 0) return null;
+            const randomIndex = empty[Math.floor(Math.random() * empty.length)];
+            return randomIndex;
+        }
+
+        // --- MEDIUM AI: win > block > center > corner > random ---
+        function getMediumMove(currentBoard)
+        {
+            const empty = getEmptyIndices(currentBoard);
+
+            // 1) Can AI win this move?
+            for (const idx of empty) {
+                const copy = [...currentBoard];
+                copy[idx] = "O";
+                if (checkWinner(copy) === "O") {
+                    return idx;
+                }
+            }
+
+            // 2) Need to block human win?
+            for (const idx of empty) {
+                const copy = [...currentBoard];
+                copy[idx] = "X";
+                if (checkWinner(copy) === "X") {
+                    return idx; // block
+                }
+            }
+
+            // 3) Take center if free
+            if (empty.includes(4)) {
+                return 4;
+            }
+
+            // 4) Take any corner if free
+            const corners = [0, 2, 6, 8].filter(i => empty.includes(i));
+            if (corners.length > 0) {
+                return corners[Math.floor(Math.random() * corners.length)];
+            }
+
+            // 5) Otherwise random
+            return getRandomMove(currentBoard);
+        }
+
+        // --- HARD AI: minimax (perfect play) ---
+        function getHardMove(currentBoard)
+        {
+            const bestMove = minimax(currentBoard, "O");
+            return bestMove.index;
+        }
+
+        function minimax(newBoard, player)
+        {
+            const empty = getEmptyIndices(newBoard);
+            const winner = checkWinner(newBoard);
+
+            if (winner === "X") {
+                return { score: -10 };
+            } else if (winner === "O") {
+                return { score: 10 };
+            } else if (empty.length === 0) {
+                return { score: 0 };
+            }
+
+            const moves = [];
+
+            for (const i of empty) {
+                const move = {};
+                move.index = i;
+
+                // make move
+                newBoard[i] = player;
+
+                const result = minimax(newBoard, player === "O" ? "X" : "O");
+                move.score = result.score;
+
+                // undo move
+                newBoard[i] = null;
+
+                moves.push(move);
+            }
+
+            let bestMoveIndex = 0;
+
+            if (player === "O") { // maximize
+                let bestScore = -Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    if (moves[i].score > bestScore) {
+                        bestScore = moves[i].score;
+                        bestMoveIndex = i;
+                    }
+                }
+            } else { // minimize
+                let bestScore = Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    if (moves[i].score < bestScore) {
+                        bestScore = moves[i].score;
+                        bestMoveIndex = i;
+                    }
+                }
+            }
+
+            return moves[bestMoveIndex];
+        }
+
+        // --- Decide which AI to use based on difficulty ---
+        function makeAiMove()
+        {
+            if (isGameOver) {
+                return;
+            }
+
+            let aiMoveIndex = null;
+
+            if (difficulty === "easy") {
+                aiMoveIndex = getRandomMove(board);
+            } else if (difficulty === "medium") {
+                aiMoveIndex = getMediumMove(board);
+            } else {
+                aiMoveIndex = getHardMove(board); // impossible
+            }
+
+            if (aiMoveIndex === null) return;
+
+            makeMove(aiMoveIndex, "O");
+
+            const resultAfterAi = checkWinner(board);
+            if (resultAfterAi !== null) {
+                endGame(resultAfterAi);
+            } else {
+                updateStatus("Your turn (X)");
+            }
+        }
+
+        // --- Check for winner or draw ---
+        function checkWinner(currentBoard)
+        {
+            const winningCombos = [
+                [0, 1, 2],
+                [3, 4, 5],
+                [6, 7, 8],
+                [0, 3, 6],
+                [1, 4, 7],
+                [2, 5, 8],
+                [0, 4, 8],
+                [2, 4, 6]
+            ];
+
+            // Check X or O
+            for (const [a, b, c] of winningCombos) {
+                if (
+                    currentBoard[a] &&
+                    currentBoard[a] === currentBoard[b] &&
+                    currentBoard[a] === currentBoard[c]
+                ) {
+                    return currentBoard[a]; // "X" or "O"
+                }
+            }
+
+            // Check draw
+            if (currentBoard.every(cell => cell !== null)) {
+                return "draw";
+            }
+
+            // No winner yet
+            return null;
+        }
+
+        // --- Handle end of the game ---
+        function endGame(result)
+        {
+            isGameOver = true;
+
+            if (result === "X") {
+                updateStatus("You win! 🎉");
+                document.body.classList.add("game-win");
+            } else if (result === "O") {
+                updateStatus("AI wins! 🤖");
+                document.body.classList.add("game-lose");
+            } else {
+                updateStatus("It's a draw 😐");
+                document.body.classList.add("game-draw");
+            }
+        }
+
+        // --- Setup controls and start first game ---
+        document.getElementById("resetBtn").addEventListener("click", startGame);
+
+        document.getElementById("difficultySelect").addEventListener("change", (event) => {
+            difficulty = event.target.value;
+            startGame(); // restart when difficulty changes
+        });
+
+        // Start when page loads
+        startGame();
+    </script>
+</body>
+</html>
