@@ -49,6 +49,7 @@
         }
 
         #board {
+            position: relative; /* needed for win line */
             display: grid;
             grid-template-columns: repeat(3, 100px);
             grid-template-rows: repeat(3, 100px);
@@ -204,6 +205,31 @@
             0%   { opacity: 0.9; transform: scale(0.9); }
             100% { opacity: 0;   transform: scale(1.3); }
         }
+
+        /* 🌈 winning line overlay */
+        #winLine {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            height: 6px;
+            width: 0;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #22c55e, #a855f7);
+            box-shadow: 0 0 14px rgba(34, 197, 94, 0.8);
+            opacity: 0;
+            transform-origin: center center;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+            transition:
+                opacity 0.2s ease,
+                width 0.2s ease,
+                transform 0.2s ease;
+        }
+
+        #board.show-win-line #winLine {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -233,6 +259,7 @@
         let currentPlayer = "X";          // human = X, AI = O
         let isGameOver = false;
         let difficulty = "medium";        // easy | medium | hard
+        let winningCombo = null;          // stores [a, b, c] indexes for win line
 
         // --- Initialize the board and event listeners ---
         function startGame()
@@ -240,8 +267,17 @@
             board = Array(9).fill(null);
             currentPlayer = "X";
             isGameOver = false;
+            winningCombo = null;
             updateStatus("Your turn (X)");
             document.body.classList.remove("game-win", "game-lose", "game-draw");
+
+            const boardDiv = document.getElementById("board");
+            boardDiv.classList.remove("show-win-line");
+            const winLine = document.getElementById("winLine");
+            if (winLine) {
+                winLine.style.width = "0px";
+            }
+
             renderBoard();
         }
 
@@ -275,6 +311,14 @@
 
                 boardDiv.appendChild(cellDiv);
             });
+
+            // ensure winLine element exists inside board
+            let winLine = document.getElementById("winLine");
+            if (!winLine) {
+                winLine = document.createElement("div");
+                winLine.id = "winLine";
+            }
+            boardDiv.appendChild(winLine);
         }
 
         // --- Handle when the human clicks a cell ---
@@ -464,6 +508,9 @@
         // --- Check for winner or draw ---
         function checkWinner(currentBoard)
         {
+            // reset; will be set if a real win is found
+            winningCombo = null;
+
             const winningCombos = [
                 [0, 1, 2],
                 [3, 4, 5],
@@ -482,7 +529,8 @@
                     currentBoard[a] === currentBoard[b] &&
                     currentBoard[a] === currentBoard[c]
                 ) {
-                    return currentBoard[a]; // "X" or "O"
+                    winningCombo = [a, b, c]; // save for win line
+                    return currentBoard[a];   // "X" or "O"
                 }
             }
 
@@ -493,6 +541,40 @@
 
             // No winner yet
             return null;
+        }
+
+        // --- Draw winning line across three winning cells ---
+        function drawWinLine()
+        {
+            if (!winningCombo) return;
+
+            const boardDiv = document.getElementById("board");
+            const cells = boardDiv.querySelectorAll(".cell");
+            const winLine = document.getElementById("winLine");
+            if (!winLine) return;
+
+            // use first and third cell of combo
+            const [a, , c] = winningCombo;
+            const rectA = cells[a].getBoundingClientRect();
+            const rectC = cells[c].getBoundingClientRect();
+            const boardRect = boardDiv.getBoundingClientRect();
+
+            const x1 = rectA.left + rectA.width / 2 - boardRect.left;
+            const y1 = rectA.top + rectA.height / 2 - boardRect.top;
+            const x2 = rectC.left + rectC.width / 2 - boardRect.left;
+            const y2 = rectC.top + rectC.height / 2 - boardRect.top;
+
+            const length = Math.hypot(x2 - x1, y2 - y1);
+            const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+            const centerX = (x1 + x2) / 2;
+            const centerY = (y1 + y2) / 2;
+
+            winLine.style.width = length + "px";
+            winLine.style.left = centerX + "px";
+            winLine.style.top = centerY + "px";
+            winLine.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+
+            boardDiv.classList.add("show-win-line");
         }
 
         // --- Handle end of the game ---
@@ -509,6 +591,11 @@
             } else {
                 updateStatus("It's a draw 😐");
                 document.body.classList.add("game-draw");
+            }
+
+            if (result === "X" || result === "O") {
+                // small timeout so DOM layout is ready
+                setTimeout(drawWinLine, 50);
             }
         }
 
