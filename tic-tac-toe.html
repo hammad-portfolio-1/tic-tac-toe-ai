@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tic-Tac-Toe – Online & AI</title>
+
+  <!-- Firebase (v8) – must be before our script -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #020617;
+      --bg-card: #020617;
+      --bg-cell: #0b1120;
+      --bg-cell-hover: #111827;
+      --border-cell: #1f2937;
+      --x-color: #38bdf8;
+      --o-color: #f97316;
+      --text-muted: #9ca3af;
+      --text-main: #e5e7eb;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    body.theme-light {
+      --bg-dark: #e5e7eb;
+      --bg-card: #f9fafb;
+      --bg-cell: #ffffff;
+      --bg-cell-hover: #f3f4f6;
+      --border-cell: #d1d5db;
+      --x-color: #0ea5e9;
+      --o-color: #f97316;
+      --text-muted: #4b5563;
+      --text-main: #111827;
+      background: radial-gradient(circle at top, #e5e7eb 0, #f1f5f9 60%, #e5e7eb 100%);
+    }
+
+    h1 {
+      margin-bottom: 6px;
+      letter-spacing: 0.05em;
+    }
+
+    h1 span {
+      background: linear-gradient(90deg, #38bdf8, #a855f7, #f97316);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    #status {
+      margin-bottom: 10px;
+      font-size: 1rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    #board {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 8px;
+      padding: 18px;
+      border-radius: 16px;
+      background: radial-gradient(circle at top, var(--bg-card), var(--bg-card), #000);
+      box-shadow:
+        0 20px 40px rgba(15, 23, 42, 0.9),
+        0 0 20px rgba(56, 189, 248, 0.1);
+    }
+
+    body.theme-light #board {
+      box-shadow:
+        0 20px 40px rgba(148, 163, 184, 0.7),
+        0 0 20px rgba(125, 211, 252, 0.2);
+    }
+
+    .cell {
+      width: 100px;
+      height: 100px;
+      background: var(--bg-cell);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.6rem;
+      cursor: pointer;
+      user-select: none;
+      border: 1px solid var(--border-cell);
+      transition:
+        transform 0.12s ease,
+        background 0.12s ease,
+        box-shadow 0.12s ease,
+        border-color 0.12s ease;
+    }
+
+    .cell:hover {
+      transform: translateY(-2px) scale(1.03);
+      background: var(--bg-cell-hover);
+      box-shadow: 0 0 12px rgba(148, 163, 184, 0.3);
+      border-color: #38bdf8;
+    }
+
+    .cell.disabled {
+      cursor: default;
+      opacity: 0.9;
+      box-shadow: none;
+      border-color: var(--border-cell);
+    }
+
+    .cell.x {
+      color: var(--x-color);
+      text-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+    }
+
+    .cell.o {
+      color: var(--o-color);
+      text-shadow: 0 0 12px rgba(249, 115, 22, 0.7);
+    }
+
+    #controls {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 8px 14px;
+      border-radius: 999px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.6);
+    }
+
+    body.theme-light #controls,
+    body.theme-light #scoreboard,
+    body.theme-light #onlinePanel {
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 10px 25px rgba(148, 163, 184, 0.5);
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    select,
+    button,
+    input[type="text"] {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: none;
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    select {
+      background: #020617;
+      color: var(--text-main);
+      border: 1px solid #334155;
+    }
+
+    body.theme-light select {
+      background: #ffffff;
+      border-color: #d1d5db;
+    }
+
+    input[type="text"] {
+      background: #020617;
+      color: var(--text-main);
+      border: 1px solid #334155;
+      width: 80px;
+      text-align: center;
+    }
+
+    body.theme-light input[type="text"] {
+      background: #ffffff;
+      border-color: #d1d5db;
+      color: var(--text-main);
+    }
+
+    button {
+      cursor: pointer;
+      background: linear-gradient(90deg, #38bdf8, #a855f7);
+      color: white;
+      font-weight: 500;
+      box-shadow: 0 8px 20px rgba(56, 189, 248, 0.4);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      white-space: nowrap;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(56, 189, 248, 0.5);
+    }
+
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 10px rgba(56, 189, 248, 0.3);
+    }
+
+    #themeBtn {
+      background: linear-gradient(90deg, #f97316, #22c55e);
+      box-shadow: 0 8px 20px rgba(249, 115, 22, 0.4);
+    }
+
+    #scoreboard {
+      margin-top: 10px;
+      display: flex;
+      gap: 14px;
+      font-size: 0.85rem;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 6px 16px;
+      border-radius: 999px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.6);
+      color: var(--text-muted);
+    }
+
+    #scoreboard span strong {
+      color: var(--text-main);
+    }
+
+    #onlinePanel {
+      margin-top: 12px;
+      font-size: 0.85rem;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 8px 16px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.6);
+      color: var(--text-muted);
+      max-width: 360px;
+      text-align: center;
+    }
+
+    #onlineActions {
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Winning line */
+    #winLine {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      height: 6px;
+      width: 0;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #22c55e, #a855f7);
+      box-shadow: 0 0 14px rgba(34, 197, 94, 0.8);
+      opacity: 0;
+      transform-origin: center center;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 10;
+      transition:
+        opacity 0.2s ease,
+        width 0.2s ease,
+        transform 0.2s ease;
+    }
+
+    #board.show-win-line #winLine {
+      opacity: 1;
+    }
+
+    /* Bloom effect overlay */
+    #flashOverlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 999;
+    }
+
+    body.game-win #flashOverlay {
+      animation: flashWin 0.7s ease-out forwards;
+      background: radial-gradient(
+        circle at center,
+        rgba(34, 197, 94, 0.9) 0,
+        rgba(34, 197, 94, 0.3) 35%,
+        transparent 70%
+      );
+    }
+
+    body.game-lose #flashOverlay {
+      animation: flashLose 0.7s ease-out forwards;
+      background: radial-gradient(
+        circle at center,
+        rgba(248, 113, 113, 0.9) 0,
+        rgba(248, 113, 113, 0.3) 35%,
+        transparent 70%
+      );
+    }
+
+    body.game-draw #flashOverlay {
+      animation: flashDraw 0.7s ease-out forwards;
+      background: radial-gradient(
+        circle at center,
+        rgba(129, 140, 248, 0.9) 0,
+        rgba(129, 140, 248, 0.3) 35%,
+        transparent 70%
+      );
+    }
+
+    @keyframes flashWin {
+      0% { opacity: 0.9; transform: scale(0.9); }
+      100% { opacity: 0; transform: scale(1.3); }
+    }
+
+    @keyframes flashLose {
+      0% { opacity: 0.9; transform: scale(0.9); }
+      100% { opacity: 0; transform: scale(1.3); }
+    }
+
+    @keyframes flashDraw {
+      0% { opacity: 0.9; transform: scale(0.9); }
+      100% { opacity: 0; transform: scale(1.3); }
+    }
+  </style>
+</head>
+<body>
+  <h1><span>Tic-Tac-Toe</span></h1>
+  <div id="status">Your turn (X)</div>
+
+  <div id="board"></div>
+
+  <div id="controls">
+    <label for="modeSelect">Mode:</label>
+    <select id="modeSelect">
+      <option value="ai" selected>Vs AI</option>
+      <option value="human">Two Players (same device)</option>
+      <option value="onlineFriend">Online – Friend (room code)</option>
+    </select>
+
+    <label for="difficultySelect" id="difficultyLabel">Difficulty:</label>
+    <select id="difficultySelect">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Impossible</option>
+    </select>
+
+    <button id="resetBtn">Restart</button>
+    <button id="themeBtn">Light theme</button>
+  </div>
+
+  <div id="scoreboard">
+    <span>X wins: <strong id="scoreX">0</strong></span>
+    <span>O wins: <strong id="scoreO">0</strong></span>
+    <span>Draws: <strong id="scoreDraw">0</strong></span>
+  </div>
+
+  <div id="onlinePanel" class="hidden">
+    <div id="onlineStatusText">
+      Online Friend mode: create a room or join your friend's code.
+    </div>
+    <div id="onlineActions">
+      <button id="createRoomBtn">Create room</button>
+      <input type="text" id="roomCodeInput" placeholder="Room code" />
+      <button id="joinRoomBtn">Join room</button>
+      <button id="leaveRoomBtn" class="hidden">Leave room</button>
+    </div>
+  </div>
+
+  <div id="flashOverlay"></div>
+
+  <script>
+    /***********************
+     *  Firebase config   *
+     ***********************/
+
+    // TODO: ❗ Replace with YOUR actual Firebase config
+    // Create a Firebase project and Realtime Database,
+    // then copy-paste the config object here.
+ 
+    const firebaseConfig = {
+    apiKey: "AIzaSyAKVHqKHCluClempgYttlgcKPRkjkCPxUQ",
+    authDomain: "tic-tac-toe-online-32f92.firebaseapp.com",
+    databaseURL: "https://tic-tac-toe-online-32f92-default-rtdb.firebaseio.com",
+    projectId: "tic-tac-toe-online-32f92",
+    storageBucket: "tic-tac-toe-online-32f92.firebasestorage.app",
+    messagingSenderId: "1080709712930",
+    appId: "1:1080709712930:web:c5e7ab7d549f6b64df4e7b"
+    };
+
+
+    let firebaseReady = false;
+    let db = null;
+
+    function initFirebaseIfPossible() {
+      try {
+        if (!firebase.apps.length) {
+          if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+            console.warn("Firebase config not set. Online mode will be disabled.");
+            
+          }
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.database();
+        firebaseReady = true;
+      } catch (e) {
+        console.warn("Firebase init failed:", e);
+      }
+    }
+
+    /***********************
+     *  Game state         *
+     ***********************/
+
+    let board = Array(9).fill(null);
+    let currentPlayer = "X";
+    let isGameOver = false;
+    let difficulty = "medium";
+    let gameMode = "ai"; // "ai" | "human" | "onlineFriend"
+    let winningCombo = null;
+
+    let scoreX = 0;
+    let scoreO = 0;
+    let scoreDraw = 0;
+
+    // Online state
+    const clientIdKey = "tttClientId";
+    let clientId = localStorage.getItem(clientIdKey);
+    if (!clientId) {
+      clientId = "c_" + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem(clientIdKey, clientId);
+    }
+
+    let onlineRoomId = null;
+    let onlinePlayerSymbol = "X";    // this client: "X" or "O"
+    let onlineOpponentSymbol = "O";
+    let onlineRoomRef = null;
+    let onlineRoomListener = null;
+    let isMyOnlineTurn = false;
+
+    const statusDiv = document.getElementById("status");
+    const boardDiv = document.getElementById("board");
+    const difficultySelect = document.getElementById("difficultySelect");
+    const difficultyLabel = document.getElementById("difficultyLabel");
+    const modeSelect = document.getElementById("modeSelect");
+    const resetBtn = document.getElementById("resetBtn");
+    const themeBtn = document.getElementById("themeBtn");
+    const flashOverlay = document.getElementById("flashOverlay");
+
+    const scoreXSpan = document.getElementById("scoreX");
+    const scoreOSpan = document.getElementById("scoreO");
+    const scoreDrawSpan = document.getElementById("scoreDraw");
+
+    const onlinePanel = document.getElementById("onlinePanel");
+    const onlineStatusText = document.getElementById("onlineStatusText");
+    const createRoomBtn = document.getElementById("createRoomBtn");
+    const joinRoomBtn = document.getElementById("joinRoomBtn");
+    const leaveRoomBtn = document.getElementById("leaveRoomBtn");
+    const roomCodeInput = document.getElementById("roomCodeInput");
+
+    /***********************
+     *  Core board logic   *
+     ***********************/
+
+    function updateStatus(msg) {
+      statusDiv.textContent = msg;
+    }
+
+    function renderBoard() {
+      boardDiv.innerHTML = "";
+
+      board.forEach((value, index) => {
+        const cellDiv = document.createElement("div");
+        cellDiv.classList.add("cell");
+        if (value !== null) {
+          cellDiv.classList.add("disabled");
+        }
+        if (value === "X") cellDiv.classList.add("x");
+        if (value === "O") cellDiv.classList.add("o");
+
+        cellDiv.textContent = value ? value : "";
+        cellDiv.dataset.index = index;
+        cellDiv.addEventListener("click", handleCellClick);
+
+        boardDiv.appendChild(cellDiv);
+      });
+
+      // Ensure winLine exists
+      let winLine = document.getElementById("winLine");
+      if (!winLine) {
+        winLine = document.createElement("div");
+        winLine.id = "winLine";
+      }
+      boardDiv.appendChild(winLine);
+    }
+
+    function startGameOffline() {
+      board = Array(9).fill(null);
+      currentPlayer = "X";
+      isGameOver = false;
+      winningCombo = null;
+      document.body.classList.remove("game-win", "game-lose", "game-draw");
+      boardDiv.classList.remove("show-win-line");
+      const winLine = document.getElementById("winLine");
+      if (winLine) winLine.style.width = "0px";
+
+      if (gameMode === "ai") {
+        updateStatus("Your turn (X)");
+      } else if (gameMode === "human") {
+        updateStatus("Player X's turn");
+      }
+
+      renderBoard();
+    }
+
+    function handleCellClick(event) {
+      if (isGameOver) return;
+
+      const cellIndex = parseInt(event.target.dataset.index, 10);
+      if (board[cellIndex] !== null) return;
+
+      if (gameMode === "onlineFriend") {
+        handleOnlineCellClick(cellIndex);
+        return;
+      }
+
+      // Offline modes
+      if (gameMode === "ai") {
+        // human move
+        makeMove(cellIndex, "X");
+        const res = checkWinner(board);
+        if (res !== null) {
+          endGame(res, /*fromOnline*/ false);
+          return;
+        }
+        // AI move
+        setTimeout(() => {
+          makeAiMove();
+        }, 250);
+      } else if (gameMode === "human") {
+        makeMove(cellIndex, currentPlayer);
+        const res = checkWinner(board);
+        if (res !== null) {
+          endGame(res, false);
+        } else {
+          currentPlayer = currentPlayer === "X" ? "O" : "X";
+          updateStatus(`Player ${currentPlayer}'s turn`);
+        }
+      }
+    }
+
+    function makeMove(cellIndex, player) {
+      if (board[cellIndex] === null && !isGameOver) {
+        board[cellIndex] = player;
+        renderBoard();
+      }
+    }
+
+    function getEmptyIndices(b) {
+      return b
+        .map((val, idx) => (val === null ? idx : null))
+        .filter((idx) => idx !== null);
+    }
+
+    function getRandomMove(b) {
+      const empty = getEmptyIndices(b);
+      if (empty.length === 0) return null;
+      return empty[Math.floor(Math.random() * empty.length)];
+    }
+
+    function getMediumMove(b) {
+      const empty = getEmptyIndices(b);
+
+      // 1) Try to win
+      for (const idx of empty) {
+        const copy = [...b];
+        copy[idx] = "O";
+        if (checkWinner(copy) === "O") return idx;
+      }
+
+      // 2) Block X
+      for (const idx of empty) {
+        const copy = [...b];
+        copy[idx] = "X";
+        if (checkWinner(copy) === "X") return idx;
+      }
+
+      // 3) Center
+      if (empty.includes(4)) return 4;
+
+      // 4) Corner
+      const corners = [0, 2, 6, 8].filter((i) => empty.includes(i));
+      if (corners.length) {
+        return corners[Math.floor(Math.random() * corners.length)];
+      }
+
+      // 5) Random
+      return getRandomMove(b);
+    }
+
+    function getHardMove(b) {
+      const best = minimax(b, "O");
+      return best.index;
+    }
+
+    function minimax(newBoard, player) {
+      const empty = getEmptyIndices(newBoard);
+      const winner = checkWinner(newBoard);
+
+      if (winner === "X") return { score: -10 };
+      if (winner === "O") return { score: 10 };
+      if (empty.length === 0) return { score: 0 };
+
+      const moves = [];
+
+      for (const i of empty) {
+        const move = { index: i };
+        newBoard[i] = player;
+
+        const result = minimax(newBoard, player === "O" ? "X" : "O");
+        move.score = result.score;
+
+        newBoard[i] = null;
+        moves.push(move);
+      }
+
+      let bestMoveIndex = 0;
+
+      if (player === "O") {
+        let bestScore = -Infinity;
+        for (let i = 0; i < moves.length; i++) {
+          if (moves[i].score > bestScore) {
+            bestScore = moves[i].score;
+            bestMoveIndex = i;
+          }
+        }
+      } else {
+        let bestScore = Infinity;
+        for (let i = 0; i < moves.length; i++) {
+          if (moves[i].score < bestScore) {
+            bestScore = moves[i].score;
+            bestMoveIndex = i;
+          }
+        }
+      }
+
+      return moves[bestMoveIndex];
+    }
+
+    function makeAiMove() {
+      if (isGameOver) return;
+
+      let idx = null;
+      if (difficulty === "easy") idx = getRandomMove(board);
+      else if (difficulty === "medium") idx = getMediumMove(board);
+      else idx = getHardMove(board);
+
+      if (idx === null) return;
+      makeMove(idx, "O");
+
+      const res = checkWinner(board);
+      if (res !== null) {
+        endGame(res, false);
+      } else {
+        updateStatus("Your turn (X)");
+      }
+    }
+
+    function checkWinner(b) {
+      winningCombo = null;
+
+      const lines = [
+        [0, 1, 2],
+        [3, 4, 5],
+        [6, 7, 8],
+        [0, 3, 6],
+        [1, 4, 7],
+        [2, 5, 8],
+        [0, 4, 8],
+        [2, 4, 6]
+      ];
+
+      for (const [a, c, d] of lines) {
+        if (b[a] && b[a] === b[c] && b[a] === b[d]) {
+          winningCombo = [a, c, d];
+          return b[a];
+        }
+      }
+
+      if (b.every((cell) => cell !== null)) return "draw";
+
+      return null;
+    }
+
+    function drawWinLine() {
+      if (!winningCombo) return;
+      const cells = boardDiv.querySelectorAll(".cell");
+      const winLine = document.getElementById("winLine");
+      if (!winLine) return;
+
+      const [a, , c] = winningCombo;
+      const rectA = cells[a].getBoundingClientRect();
+      const rectC = cells[c].getBoundingClientRect();
+      const boardRect = boardDiv.getBoundingClientRect();
+
+      const x1 = rectA.left + rectA.width / 2 - boardRect.left;
+      const y1 = rectA.top + rectA.height / 2 - boardRect.top;
+      const x2 = rectC.left + rectC.width / 2 - boardRect.left;
+      const y2 = rectC.top + rectC.height / 2 - boardRect.top;
+
+      const length = Math.hypot(x2 - x1, y2 - y1);
+      const angle = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
+      const centerX = (x1 + x2) / 2;
+      const centerY = (y1 + y2) / 2;
+
+      winLine.style.width = length + "px";
+      winLine.style.left = centerX + "px";
+      winLine.style.top = centerY + "px";
+      winLine.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+
+      boardDiv.classList.add("show-win-line");
+    }
+
+    function updateScoreboard(result) {
+      if (result === "X") scoreX++;
+      else if (result === "O") scoreO++;
+      else if (result === "draw") scoreDraw++;
+
+      scoreXSpan.textContent = scoreX.toString();
+      scoreOSpan.textContent = scoreO.toString();
+      scoreDrawSpan.textContent = scoreDraw.toString();
+    }
+
+    function endGame(result, fromOnline) {
+      isGameOver = true;
+      updateScoreboard(result);
+
+      if (result === "X") {
+        updateStatus(fromOnline ? "X wins (online) 🎉" : "X wins! 🎉");
+        document.body.classList.add("game-win");
+      } else if (result === "O") {
+        updateStatus(fromOnline ? "O wins (online) 🎉" : "O wins! 🎉");
+        document.body.classList.add("game-lose");
+      } else {
+        updateStatus("It's a draw 😐");
+        document.body.classList.add("game-draw");
+      }
+
+      setTimeout(drawWinLine, 50);
+    }
+
+    /***********************
+     *  Online – Friend    *
+     ***********************/
+
+    function showOnlinePanel(show) {
+      if (show && firebaseReady) {
+        onlinePanel.classList.remove("hidden");
+      } else if (show && !firebaseReady) {
+        onlinePanel.classList.remove("hidden");
+        onlineStatusText.textContent =
+          "Firebase config not set. Online mode is disabled.";
+        createRoomBtn.classList.add("hidden");
+        joinRoomBtn.classList.add("hidden");
+        roomCodeInput.classList.add("hidden");
+        leaveRoomBtn.classList.add("hidden");
+      } else {
+        onlinePanel.classList.add("hidden");
+      }
+    }
+
+    function clearOnlineRoom() {
+      if (onlineRoomRef && onlineRoomListener) {
+        onlineRoomRef.off("value", onlineRoomListener);
+      }
+      onlineRoomRef = null;
+      onlineRoomListener = null;
+      onlineRoomId = null;
+      onlinePlayerSymbol = "X";
+      onlineOpponentSymbol = "O";
+      isMyOnlineTurn = false;
+      leaveRoomBtn.classList.add("hidden");
+      roomCodeInput.value = "";
+    }
+
+    function leaveOnlineGame() {
+      if (!firebaseReady) return;
+
+      if (onlineRoomRef && onlineRoomId) {
+        // Host removes room, guest just detaches
+        onlineRoomRef.once("value").then((snap) => {
+          const data = snap.val();
+          if (data && data.hostId === clientId) {
+            onlineRoomRef.remove();
+          }
+          clearOnlineRoom();
+          onlineStatusText.textContent = "Left room. Create or join another.";
+          startGameOffline();
+        });
+      } else {
+        clearOnlineRoom();
+        onlineStatusText.textContent = "Create or join a room.";
+        startGameOffline();
+      }
+    }
+
+    function createOnlineRoom() {
+      if (!firebaseReady) {
+        onlineStatusText.textContent =
+          "Online disabled (no Firebase config).";
+        return;
+      }
+
+      clearOnlineRoom();
+
+      // 4-digit room ID
+      const roomId = Math.floor(1000 + Math.random() * 9000).toString();
+      const roomRef = db.ref("rooms/" + roomId);
+
+      const initialData = {
+        hostId: clientId,
+        guestId: null,
+        board: Array(9).fill(null),
+        currentTurn: "X",
+        status: "waiting", // "waiting" | "playing" | "finished"
+        winner: null,
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      };
+
+      roomRef
+        .set(initialData)
+        .then(() => {
+          onlineRoomId = roomId;
+          onlineRoomRef = roomRef;
+          onlinePlayerSymbol = "X";
+          onlineOpponentSymbol = "O";
+          isMyOnlineTurn = true;
+          leaveRoomBtn.classList.remove("hidden");
+          onlineStatusText.textContent =
+            "Room code: " + roomId + ". Share it with your friend and wait.";
+
+          attachOnlineListener();
+        })
+        .catch((err) => {
+          console.error("Error creating room:", err);
+          onlineStatusText.textContent = "Error creating room. Try again.";
+        });
+    }
+
+    function joinOnlineRoom() {
+      if (!firebaseReady) {
+        onlineStatusText.textContent =
+          "Online disabled (no Firebase config).";
+        return;
+      }
+
+      const code = roomCodeInput.value.trim();
+      if (!code) {
+        onlineStatusText.textContent = "Enter a room code first.";
+        return;
+      }
+
+      const roomRef = db.ref("rooms/" + code);
+
+      roomRef
+        .once("value")
+        .then((snap) => {
+          if (!snap.exists()) {
+            onlineStatusText.textContent = "Room not found.";
+            return;
+          }
+
+          const data = snap.val();
+          if (data.guestId && data.guestId !== clientId) {
+            onlineStatusText.textContent = "Room is full.";
+            return;
+          }
+
+          // Join as guest
+          onlineRoomId = code;
+          onlineRoomRef = roomRef;
+          onlinePlayerSymbol = "O";
+          onlineOpponentSymbol = "X";
+          isMyOnlineTurn = false;
+          leaveRoomBtn.classList.remove("hidden");
+
+          roomRef
+            .update({
+              guestId: clientId,
+              status: "playing"
+            })
+            .then(() => {
+              onlineStatusText.textContent =
+                "Joined room " +
+                code +
+                ". You are O. Waiting for X's move.";
+              attachOnlineListener();
+            });
+        })
+        .catch((err) => {
+          console.error("Error joining room:", err);
+          onlineStatusText.textContent = "Error joining room. Try again.";
+        });
+    }
+
+    function attachOnlineListener() {
+      if (!onlineRoomRef) return;
+
+      onlineRoomListener = (snap) => {
+        if (!snap.exists()) {
+          // Room deleted
+          onlineStatusText.textContent = "Room closed or deleted.";
+          clearOnlineRoom();
+          startGameOffline();
+          return;
+        }
+
+        const data = snap.val();
+
+        // Sync local board from DB
+        board = Array.isArray(data.board) ? data.board : Array(9).fill(null);
+        renderBoard();
+
+        // Determine game state from DB
+        const status = data.status || "waiting";
+        const turn = data.currentTurn || "X";
+        const winner = data.winner || null;
+
+        isGameOver = status === "finished";
+        winningCombo = null; // will be recalculated if needed
+
+        if (status === "waiting") {
+          onlineStatusText.textContent =
+            "Room " +
+            onlineRoomId +
+            " – waiting for a second player to join.";
+          updateStatus("Waiting for opponent…");
+        } else if (status === "playing") {
+          isMyOnlineTurn = turn === onlinePlayerSymbol;
+          if (isMyOnlineTurn) {
+            updateStatus("Your turn (" + onlinePlayerSymbol + ")");
+            onlineStatusText.textContent =
+              "Room " + onlineRoomId + " – your move.";
+          } else {
+            updateStatus("Opponent's turn (" + onlineOpponentSymbol + ")");
+            onlineStatusText.textContent =
+              "Room " + onlineRoomId + " – waiting for opponent's move.";
+          }
+        } else if (status === "finished") {
+          // Winner stored or re-check
+          const res = winner || checkWinner(board);
+          if (!isGameOver) {
+            endGame(res, true);
+          } else if (winner) {
+            // if already ended locally, just ensure line is drawn
+            checkWinner(board);
+            setTimeout(drawWinLine, 50);
+          }
+        }
+      };
+
+      onlineRoomRef.on("value", onlineRoomListener);
+    }
+
+    function handleOnlineCellClick(cellIndex) {
+      if (!firebaseReady) return;
+      if (!onlineRoomRef || !onlineRoomId) {
+        onlineStatusText.textContent =
+          "You are not in a room. Create or join first.";
+        return;
+      }
+      if (isGameOver) return;
+      if (!isMyOnlineTurn) return;
+      if (board[cellIndex] !== null) return;
+
+      // make move locally
+      board[cellIndex] = onlinePlayerSymbol;
+      renderBoard();
+
+      const result = checkWinner(board);
+
+      const updateData = {
+        board: board,
+        currentTurn: onlineOpponentSymbol
+      };
+
+      if (result !== null) {
+        updateData.status = "finished";
+        updateData.winner = result;
+      } else {
+        updateData.status = "playing";
+        updateData.winner = null;
+      }
+
+      onlineRoomRef.update(updateData).catch((err) => {
+        console.error("Error updating room:", err);
+      });
+    }
+
+    /***********************
+     *  UI events          *
+     ***********************/
+
+    resetBtn.addEventListener("click", () => {
+      if (gameMode === "onlineFriend") {
+        // In online mode, reset by host only
+        if (!firebaseReady || !onlineRoomRef) {
+          startGameOffline();
+          return;
+        }
+        onlineRoomRef
+          .once("value")
+          .then((snap) => {
+            const data = snap.val();
+            if (!data) return;
+            if (data.hostId === clientId) {
+              const resetData = {
+                board: Array(9).fill(null),
+                currentTurn: "X",
+                status: data.guestId ? "playing" : "waiting",
+                winner: null
+              };
+              onlineRoomRef.update(resetData);
+            } else {
+              onlineStatusText.textContent =
+                "Only the host (X) can restart the online game.";
+            }
+          })
+          .catch((err) => console.error(err));
+      } else {
+        startGameOffline();
+      }
+    });
+
+    difficultySelect.addEventListener("change", (e) => {
+      difficulty = e.target.value;
+      if (gameMode === "ai") {
+        startGameOffline();
+      }
+    });
+
+    modeSelect.addEventListener("change", (e) => {
+      const mode = e.target.value;
+      gameMode = mode;
+      document.body.classList.remove("game-win", "game-lose", "game-draw");
+
+      if (mode === "ai") {
+        difficultyLabel.classList.remove("hidden");
+        difficultySelect.classList.remove("hidden");
+        showOnlinePanel(false);
+        clearOnlineRoom();
+        startGameOffline();
+      } else if (mode === "human") {
+        difficultyLabel.classList.add("hidden");
+        difficultySelect.classList.add("hidden");
+        showOnlinePanel(false);
+        clearOnlineRoom();
+        startGameOffline();
+      } else if (mode === "onlineFriend") {
+        difficultyLabel.classList.add("hidden");
+        difficultySelect.classList.add("hidden");
+
+        initFirebaseIfPossible();
+        showOnlinePanel(true);
+
+        // Reset board, but actual play depends on room data
+        board = Array(9).fill(null);
+        renderBoard();
+        isGameOver = true; // until room is created/joined
+        updateStatus("Online mode: create or join a room.");
+
+        if (!firebaseReady) {
+          updateStatus("Online disabled (no Firebase config).");
+        }
+      }
+    });
+
+    themeBtn.addEventListener("click", () => {
+      if (document.body.classList.contains("theme-light")) {
+        document.body.classList.remove("theme-light");
+        themeBtn.textContent = "Light theme";
+      } else {
+        document.body.classList.add("theme-light");
+        themeBtn.textContent = "Dark theme";
+      }
+    });
+
+    createRoomBtn.addEventListener("click", createOnlineRoom);
+    joinRoomBtn.addEventListener("click", joinOnlineRoom);
+    leaveRoomBtn.addEventListener("click", leaveOnlineGame);
+
+    /***********************
+     *  Start game         *
+     ***********************/
+
+    // initial offline start
+    startGameOffline();
+  </script>
+</body>
+</html>
